@@ -1,0 +1,14 @@
+{
+  "name": "google-sheets-analyzer",
+  "version": "1.0.0",
+  "description": "Google Sheets analyzer with HyperFormula and Clasp integration",
+  "scripts": {
+    "clasp": "clasp"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
