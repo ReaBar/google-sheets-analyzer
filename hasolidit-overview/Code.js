@@ -1,5 +1,72 @@
 var props = PropertiesService.getUserProperties();
-props.setProperty('netWorthSheet', 'מעקב שווי נקי')
+props.setProperty('netWorthSheet', 'מעקב שווי נקי');
+
+// מעקב שווי נקי – filled on 1st of each month by trigger; sheet name = "מעקב שווי נקי YYYY"
+var NET_WORTH_SHEET_BASE = 'מעקב שווי נקי';
+var NET_WORTH_SHEET_FIRST_ROW = 6;   // first data row for credits
+var NET_WORTH_DEBITS_FIRST_ROW = 23; // first data row for debits
+var NET_WORTH_DATA_LAST_COL = 17;    // last column we write (B=2 .. Q=17)
+
+function getNetWorthSheetForYear(year) {
+  var base = props.getProperty('netWorthSheet') || NET_WORTH_SHEET_BASE;
+  return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(base + ' ' + year);
+}
+
+/**
+ * Create "מעקב שווי נקי YYYY" if missing: duplicate previous year, rename, clear monthly data.
+ * Clears rows 6..22 (credits) and 23..end (debits), columns B–Q.
+ * @param {number} year - e.g. 2026
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet|null} the sheet, or null if template not found
+ */
+function createNetWorthSheetForYearIfMissing(year) {
+  var base = props.getProperty('netWorthSheet') || NET_WORTH_SHEET_BASE;
+  var name = base + ' ' + year;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(name);
+  if (sheet) return sheet;
+
+  var templateName = base + ' ' + (year - 1);
+  var template = ss.getSheetByName(templateName);
+  if (!template) {
+    Logger.log('Template sheet "' + templateName + '" not found. Create it first.');
+    return null;
+  }
+
+  var newSheet = template.copyTo(ss);
+  newSheet.setName(name);
+
+  // Clear the cells we populate per month: credits block (rows 6–22), debits block (rows 23–end), cols B–Q
+  var colStart = 2;
+  newSheet.getRange(NET_WORTH_SHEET_FIRST_ROW, colStart, NET_WORTH_DEBITS_FIRST_ROW - 1, NET_WORTH_DATA_LAST_COL).clearContent();
+  newSheet.getRange(NET_WORTH_DEBITS_FIRST_ROW, colStart, newSheet.getMaxRows(), NET_WORTH_DATA_LAST_COL).clearContent();
+
+  Logger.log('Created and cleared sheet "' + name + '" from template "' + templateName + '"');
+  return newSheet;
+}
+
+/**
+ * Test: delete "מעקב שווי נקי 2026" if it exists, then create it from 2025 template and clear monthly data.
+ * Run from Script Editor or via menu "Net worth functions" → "Create 2026 sheet (test)".
+ */
+function createAndSetup2026Sheet() {
+  var base = props.getProperty('netWorthSheet') || NET_WORTH_SHEET_BASE;
+  var name2026 = base + ' 2026';
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = ss.getSheetByName(name2026);
+  if (existing) {
+    ss.deleteSheet(existing);
+    Logger.log('Deleted existing sheet "' + name2026 + '"');
+  }
+  var sheet = createNetWorthSheetForYearIfMissing(2026);
+  var ui = SpreadsheetApp.getUi();
+  if (sheet) {
+    if (ui) ui.toast('Sheet "' + name2026 + '" created and cleared.', 5);
+    Logger.log('Sheet "' + name2026 + '" created and cleared.');
+  } else {
+    if (ui) ui.toast('Failed: template "' + base + ' 2025" not found.', 8);
+    Logger.log('Failed: template "' + base + ' 2025" not found.');
+  }
+}
 
 function test(){
   // var budgetSheet = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1A2wZZwusoMeBLHQtbER6Qz3lasd1HoRSNZ3KmawRBUs/edit#gid=0");
@@ -16,7 +83,8 @@ function onOpen() {
       .addSeparator()
       .addSubMenu(ui.createMenu('Net worth functions')
         .addItem('fetch clean worth amounts', 'fetchNetWorthMonthlySums')
-        .addItem('fetch mortgage debt', 'updateMortgageAndKupatGemelLeashkaaDebit'))
+        .addItem('fetch mortgage debt', 'updateMortgageAndKupatGemelLeashkaaDebit')
+        .addItem('Create 2026 sheet (test)', 'createAndSetup2026Sheet'))
       .addToUi();
 }
 
@@ -56,7 +124,14 @@ function fetchNetWorthMonthlySums() {
   var oneZeroCheckingAccount = budgetSheet.getRangeByName('one_zero_checking_account').getValue();
   var creditCardsTotal = budgetSheet.getRangeByName('total_credit_cards').getValue();
   var currentYear = new Date().getFullYear();
-  var netWorthSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(`${props.getProperty('netWorthSheet')} ${currentYear}`);
+  var netWorthSheet = getNetWorthSheetForYear(currentYear);
+  if (!netWorthSheet) {
+    netWorthSheet = createNetWorthSheetForYearIfMissing(currentYear);
+  }
+  if (!netWorthSheet) {
+    Logger.log('Sheet מעקב שווי נקי ' + currentYear + ' not found and could not be created.');
+    return;
+  }
 
   //credits
   var netWorthLastRow = getNetWorthSheetLastRow(netWorthSheet);
