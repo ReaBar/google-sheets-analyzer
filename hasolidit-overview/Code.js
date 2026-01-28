@@ -3,11 +3,13 @@ props.setProperty('netWorthSheet', 'מעקב שווי נקי');
 
 // מעקב שווי נקי – filled on 1st of each month by trigger; sheet name = "מעקב שווי נקי YYYY"
 var NET_WORTH_SHEET_BASE = 'מעקב שווי נקי';
-var NET_WORTH_SHEET_FIRST_ROW = 6;   // sub-header row for credits (do not clear)
-var NET_WORTH_DEBITS_FIRST_ROW = 23; // sub-header row for debits (do not clear)
-var NET_WORTH_CREDITS_FIRST_DATA_ROW = 7;  // first data row for credits
+var NET_WORTH_SHEET_FIRST_ROW = 6;        // sub-header row for credits (do not clear)
+var NET_WORTH_DEBITS_FIRST_ROW = 23;      // sub-header row for debits (do not clear)
+var NET_WORTH_CREDITS_FIRST_DATA_ROW = 7; // first data row for credits
+var NET_WORTH_CREDITS_LAST_DATA_ROW = 22; // last data row for credits block (before debits header)
 var NET_WORTH_DEBITS_FIRST_DATA_ROW = 24; // first data row for debits
-var NET_WORTH_DATA_LAST_COL = 17;    // last column we write (B=2 .. Q=17)
+var NET_WORTH_DEBITS_LAST_DATA_ROW = 35;  // last data row for debits block (before analysis section)
+var NET_WORTH_DATA_LAST_COL = 17;         // last column we write (B=2 .. Q=17)
 var NET_WORTH_FORMULA_COLUMN_L = 12; // column L: formulas live here; do not clear or overwrite
 
 // --- Formula definitions (single source of truth; edit here and clasp push; script writes these into the sheet) ---
@@ -33,15 +35,38 @@ function getNetWorthFormula(formulaKey, row) {
 function applyNetWorthFormulasToColumnL(sheet) {
   var colL = NET_WORTH_FORMULA_COLUMN_L;
   var r;
-  for (r = NET_WORTH_CREDITS_FIRST_DATA_ROW; r <= NET_WORTH_DEBITS_FIRST_ROW - 1; r++) {
+  for (r = NET_WORTH_CREDITS_FIRST_DATA_ROW; r <= NET_WORTH_CREDITS_LAST_DATA_ROW; r++) {
     var f = getNetWorthFormula('creditsTotalL', r);
     if (f) sheet.getRange(r, colL).setFormula(f);
   }
-  var lastDebitsRow = getNetWorthDebitsSheetLastRow(sheet);
-  for (r = NET_WORTH_DEBITS_FIRST_DATA_ROW; r < lastDebitsRow; r++) {
+  for (r = NET_WORTH_DEBITS_FIRST_DATA_ROW; r <= NET_WORTH_DEBITS_LAST_DATA_ROW; r++) {
     var g = getNetWorthFormula('debitsTotalL', r);
     if (g) sheet.getRange(r, colL).setFormula(g);
   }
+}
+
+/**
+ * Clear monthly data ranges while preserving any existing formulas.
+ * Credits: rows 7–22, Debits: rows 24–35, columns B–Q. Rows 6 and 23 are sub-headers.
+ */
+function clearNetWorthDataPreservingFormulas(sheet) {
+  var firstCol = 2; // B
+  var lastCol = NET_WORTH_DATA_LAST_COL; // Q
+
+  // Helper to clear non-formula cells in a row range
+  function clearBlock(fromRow, toRow) {
+    for (var r = fromRow; r <= toRow; r++) {
+      for (var c = firstCol; c <= lastCol; c++) {
+        var cell = sheet.getRange(r, c);
+        if (!cell.getFormula()) {
+          cell.clearContent();
+        }
+      }
+    }
+  }
+
+  clearBlock(NET_WORTH_CREDITS_FIRST_DATA_ROW, NET_WORTH_CREDITS_LAST_DATA_ROW);
+  clearBlock(NET_WORTH_DEBITS_FIRST_DATA_ROW, NET_WORTH_DEBITS_LAST_DATA_ROW);
 }
 
 // --- Net worth sheet helpers ---
@@ -74,14 +99,9 @@ function createNetWorthSheetForYearIfMissing(year) {
   var newSheet = template.copyTo(ss);
   newSheet.setName(name);
 
-  // Clear monthly data only; skip column L (formulas) and sub-header rows 6 and 23.
-  var colStart = 2;
-  var lastColBeforeL = NET_WORTH_FORMULA_COLUMN_L - 1;   // K = 11
-  var firstColAfterL = NET_WORTH_FORMULA_COLUMN_L + 1;   // M = 13
-  newSheet.getRange(NET_WORTH_CREDITS_FIRST_DATA_ROW, colStart, NET_WORTH_DEBITS_FIRST_ROW - 1, lastColBeforeL).clearContent();
-  newSheet.getRange(NET_WORTH_CREDITS_FIRST_DATA_ROW, firstColAfterL, NET_WORTH_DEBITS_FIRST_ROW - 1, NET_WORTH_DATA_LAST_COL).clearContent();
-  newSheet.getRange(NET_WORTH_DEBITS_FIRST_DATA_ROW, colStart, newSheet.getMaxRows(), lastColBeforeL).clearContent();
-  newSheet.getRange(NET_WORTH_DEBITS_FIRST_DATA_ROW, firstColAfterL, newSheet.getMaxRows(), NET_WORTH_DATA_LAST_COL).clearContent();
+  // Clear monthly data only, preserving any cells that currently contain formulas.
+  // Credits: rows 7–22, Debits: rows 24–35, columns B–Q. Rows 6 and 23 are sub-headers.
+  clearNetWorthDataPreservingFormulas(newSheet);
 
   // Write formula column L from script (single source of truth)
   applyNetWorthFormulasToColumnL(newSheet);
