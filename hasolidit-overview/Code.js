@@ -344,12 +344,12 @@ function fetchNetWorthMonthlySums() {
   rangeNtoQ.setValues([existingNtoQ]);
 
   // Debits: one row, columns B–J. Only empty cells are updated; formulas in H/O remain untouched.
-  var debitsRow = [ -Number(creditCardsTotal), 0, 0, 0, 0, 0, 0, 0, 0 ]; // B–J (9 columns)
-  var debitsRange = netWorthSheet.getRange(debitsRow, 2, 1, debitsRow.length);
+  var debitsValues = [ -Number(creditCardsTotal), 0, 0, 0, 0, 0, 0, 0, 0 ]; // B–J (9 columns)
+  var debitsRange = netWorthSheet.getRange(debitsRow, 2, 1, debitsValues.length);
   var existingDebits = debitsRange.getValues()[0];
-  for (var k = 0; k < debitsRow.length; k++) {
+  for (var k = 0; k < debitsValues.length; k++) {
     if (existingDebits[k] === '' || existingDebits[k] === null) {
-      existingDebits[k] = debitsRow[k];
+      existingDebits[k] = debitsValues[k];
     }
   }
   debitsRange.setValues([existingDebits]);
