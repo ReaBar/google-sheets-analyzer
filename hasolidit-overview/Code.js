@@ -275,7 +275,11 @@ function fetchCategoriesMonthlySumsPreviousYear() {
   calculationsSheet.getRange(1,2,categorySums.length, 14).setValues(categorySums)
 }
 
-/** Run on 1st of month. Fetches from portfolio + cashflow, appends one credits row and one debits row to "מעקב שווי נקי YYYY". Creates sheet from previous year if missing. */
+/** Run on 1st of month (or manually). Fetches from portfolio + cashflow, fills the row for the current month
+ *  in "מעקב שווי נקי YYYY" (January → row 7 credits / 24 debits, February → row 8 / 25, etc.).
+ *  Only empty cells are populated so existing values are not overwritten on repeated runs.
+ *  Creates the yearly sheet from the previous year if missing.
+ */
 function fetchNetWorthMonthlySums() {
   var investmentsSheet = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1S8ploU9ZuZQGZ7B1AbH8lZk9SIFe-yqPdwOSxH1GH7U/edit#gid=997506131");
   var budgetSheet = SpreadsheetApp.openByUrl("https://docs.google.com/spreadsheets/d/1A2wZZwusoMeBLHQtbER6Qz3lasd1HoRSNZ3KmawRBUs/edit#gid=0");
@@ -292,7 +296,11 @@ function fetchNetWorthMonthlySums() {
   var otsarHayahalCheckingAccount = budgetSheet.getRangeByName('otsar_hahayal_checking_account').getValue();
   var oneZeroCheckingAccount = budgetSheet.getRangeByName('one_zero_checking_account').getValue();
   var creditCardsTotal = budgetSheet.getRangeByName('total_credit_cards').getValue();
-  var currentYear = new Date().getFullYear();
+
+  var now = new Date();
+  var currentYear = now.getFullYear();
+  var monthIndex = now.getMonth(); // 0 = Jan, 1 = Feb, ...
+
   var netWorthSheet = getNetWorthSheetForYear(currentYear);
   if (!netWorthSheet) {
     netWorthSheet = createNetWorthSheetForYearIfMissing(currentYear);
@@ -302,7 +310,11 @@ function fetchNetWorthMonthlySums() {
     return;
   }
 
-  // Credits: one row, columns B–K and M–Q. Column L has formulas and is not written.
+  // Determine fixed rows for this month: credits (row 7–18), debits (row 24–35)
+  var creditsRow = NET_WORTH_CREDITS_FIRST_DATA_ROW + monthIndex;   // Jan=7, Feb=8, ...
+  var debitsRow = NET_WORTH_DEBITS_FIRST_DATA_ROW + monthIndex;     // Jan=24, Feb=25, ...
+
+  // Credits: one row, columns B–K and N–Q. Columns L and M have formulas and are not written.
   var checking = otsarHayahalCheckingAccount + oneZeroCheckingAccount;
   var stocksTotal = stocksWorth + stocksAccountCashSheqel + stocksAccountCashUSDConverted;
   var pensionKupat = reaPensionAmount + reaKupatGemel;
@@ -310,20 +322,37 @@ function fetchNetWorthMonthlySums() {
     checking, savingsWorth, 0, stocksTotal, cryptoWorth, reaHishtalmutAmount,
     0, 0, 0, 0  // cols H–K
   ];
-  var creditsMtoQ = [ pensionKupat, realEstateWorth, 0, 0, 0 ];  // cols M–Q
-  var netWorthLastRow = getNetWorthSheetLastRow(netWorthSheet);
-  // setValues expects (numRows x numCols). We write exactly one row for each block.
-  netWorthSheet.getRange(netWorthLastRow, 2, 1, creditsBtoK.length).setValues([creditsBtoK]);      // B–K
-  netWorthSheet.getRange(netWorthLastRow, 13, 1, creditsMtoQ.length).setValues([creditsMtoQ]);    // M–Q
-  var creditsFormulaL = getNetWorthFormula('creditsTotalL', netWorthLastRow);
-  if (creditsFormulaL) netWorthSheet.getRange(netWorthLastRow, NET_WORTH_FORMULA_COLUMN_L).setFormula(creditsFormulaL);
+  var creditsNtoQ = [ pensionKupat, realEstateWorth, 0, 0, 0 ];  // cols N–Q
 
-  // Debits: one row, columns B–J; column L gets formula from NET_WORTH_FORMULAS.
-  var netWorthDebitsLastRow = getNetWorthDebitsSheetLastRow(netWorthSheet);
+  // Write credits for this month, but only into empty cells.
+  var rangeBtoK = netWorthSheet.getRange(creditsRow, 2, 1, creditsBtoK.length); // B–K
+  var existingBtoK = rangeBtoK.getValues()[0];
+  for (var i = 0; i < creditsBtoK.length; i++) {
+    if (existingBtoK[i] === '' || existingBtoK[i] === null) {
+      existingBtoK[i] = creditsBtoK[i];
+    }
+  }
+  rangeBtoK.setValues([existingBtoK]);
+
+  var rangeNtoQ = netWorthSheet.getRange(creditsRow, 14, 1, creditsNtoQ.length); // N–Q
+  var existingNtoQ = rangeNtoQ.getValues()[0];
+  for (var j = 0; j < creditsNtoQ.length; j++) {
+    if (existingNtoQ[j] === '' || existingNtoQ[j] === null) {
+      existingNtoQ[j] = creditsNtoQ[j];
+    }
+  }
+  rangeNtoQ.setValues([existingNtoQ]);
+
+  // Debits: one row, columns B–J. Only empty cells are updated; formulas in H/O remain untouched.
   var debitsRow = [ -Number(creditCardsTotal), 0, 0, 0, 0, 0, 0, 0, 0 ]; // B–J (9 columns)
-  netWorthSheet.getRange(netWorthDebitsLastRow, 2, 1, debitsRow.length).setValues([debitsRow]);
-  var debitsFormulaL = getNetWorthFormula('debitsTotalL', netWorthDebitsLastRow);
-  if (debitsFormulaL) netWorthSheet.getRange(netWorthDebitsLastRow, NET_WORTH_FORMULA_COLUMN_L).setFormula(debitsFormulaL);
+  var debitsRange = netWorthSheet.getRange(debitsRow, 2, 1, debitsRow.length);
+  var existingDebits = debitsRange.getValues()[0];
+  for (var k = 0; k < debitsRow.length; k++) {
+    if (existingDebits[k] === '' || existingDebits[k] === null) {
+      existingDebits[k] = debitsRow[k];
+    }
+  }
+  debitsRange.setValues([existingDebits]);
 }
 
 /** Run after fetchNetWorthMonthlySums. Backfills previous month's row with mortgage and Kupat Gemel from cashflow Net Worth Reports. */
