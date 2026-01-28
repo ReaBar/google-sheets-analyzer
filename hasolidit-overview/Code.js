@@ -311,15 +311,16 @@ function fetchNetWorthMonthlySums() {
   ];
   var creditsMtoQ = [ pensionKupat, realEstateWorth, 0, 0, 0 ];  // cols M–Q
   var netWorthLastRow = getNetWorthSheetLastRow(netWorthSheet);
-  netWorthSheet.getRange(netWorthLastRow, 2, netWorthLastRow, 11).setValues([creditsBtoK]);
-  netWorthSheet.getRange(netWorthLastRow, 13, netWorthLastRow, 17).setValues([creditsMtoQ]);
+  // setValues expects (numRows x numCols). We write exactly one row for each block.
+  netWorthSheet.getRange(netWorthLastRow, 2, 1, creditsBtoK.length).setValues([creditsBtoK]);      // B–K
+  netWorthSheet.getRange(netWorthLastRow, 13, 1, creditsMtoQ.length).setValues([creditsMtoQ]);    // M–Q
   var creditsFormulaL = getNetWorthFormula('creditsTotalL', netWorthLastRow);
   if (creditsFormulaL) netWorthSheet.getRange(netWorthLastRow, NET_WORTH_FORMULA_COLUMN_L).setFormula(creditsFormulaL);
 
   // Debits: one row, columns B–J; column L gets formula from NET_WORTH_FORMULAS.
   var netWorthDebitsLastRow = getNetWorthDebitsSheetLastRow(netWorthSheet);
-  var debitsRow = [ -Number(creditCardsTotal), 0, 0, 0, 0, 0, 0, 0, 0 ];
-  netWorthSheet.getRange(netWorthDebitsLastRow, 2, netWorthDebitsLastRow, 10).setValues([debitsRow]);
+  var debitsRow = [ -Number(creditCardsTotal), 0, 0, 0, 0, 0, 0, 0, 0 ]; // B–J (9 columns)
+  netWorthSheet.getRange(netWorthDebitsLastRow, 2, 1, debitsRow.length).setValues([debitsRow]);
   var debitsFormulaL = getNetWorthFormula('debitsTotalL', netWorthDebitsLastRow);
   if (debitsFormulaL) netWorthSheet.getRange(netWorthDebitsLastRow, NET_WORTH_FORMULA_COLUMN_L).setFormula(debitsFormulaL);
 }
