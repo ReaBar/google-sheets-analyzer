@@ -87,6 +87,30 @@ clasp login
 clasp clone <SCRIPT_ID> --rootDir apps-script
 ```
 
+#### Clone Apps Scripts (into named folders)
+
+Use the clone script to pull any Apps Script into a named folder. Each script gets its own directory with a self-contained `.clasp.json`.
+
+**Hasolidit Overview Sheet** (spreadsheet ID `1p4cRifbq93yIx1dT145m_Qk4USVwwG7FWKQWia3qm-E`):
+```bash
+./scripts/clone_summary_sheet_script.sh 1ylc5EWSYG5sgsiQpsynBljmX6F3FN2_BtJeG2EHMibCrcf640bxe62DW hasolidit-overview
+```
+
+**Portfolio Sheet** (stocks, real estate, cash balance):
+```bash
+./scripts/clone_summary_sheet_script.sh 1M6B-GT3QyFry0tDmTdx9Q2BOeSzyqAMl2JYwyseYtMT4KAfn7N5zUKtj portfolio
+```
+
+**Cashflow Sheet**:
+```bash
+./scripts/clone_summary_sheet_script.sh 1BleUorZ8jom7RBwiuyAtpef1nD2ihGz3-rDT3uYQTcQw0N6vM6DljHn8 cashflow
+```
+
+To get a Script ID:
+1. Open the spreadsheet
+2. **Extensions → Apps Script**
+3. In Apps Script: **Project Settings** (gear) → **Script ID**
+
 #### Create New Apps Script
 
 ```bash
@@ -95,11 +119,24 @@ clasp create --type sheets --title "My Script" --parentId <SPREADSHEET_ID> --roo
 
 #### Pull/Push Apps Script Code
 
+Each script directory has its own `.clasp.json`, so you can work with any script independently:
+
 ```bash
-cd apps-script
+# Work with Hasolidit Overview script
+cd hasolidit-overview
 clasp pull    # Get latest from Google
 # Edit files...
 clasp push    # Push changes to Google
+
+# Work with Portfolio script
+cd ../portfolio
+clasp pull
+clasp push
+
+# Work with Cashflow script
+cd ../cashflow
+clasp pull
+clasp push
 ```
 
 ## Project Structure
@@ -114,8 +151,14 @@ google-sheets-analyzer/
 │   ├── apps_script_manager.py   # Clasp integration
 │   └── config.py                # Configuration
 ├── scripts/
-│   └── analyze_summary_sheet.py # Main analysis script
-├── apps-script/                  # Clasp-managed Apps Script files
+│   ├── analyze_summary_sheet.py       # Main analysis script
+│   └── clone_summary_sheet_script.sh  # Clone any Apps Script by name
+├── hasolidit-overview/                # Hasolidit Overview Sheet Apps Script
+│   └── .clasp.json                    # Self-contained config
+├── portfolio/                          # Portfolio Sheet Apps Script (stocks, real estate, cash)
+│   └── .clasp.json                    # Self-contained config
+├── cashflow/                           # Cashflow Sheet Apps Script
+│   └── .clasp.json                    # Self-contained config
 ├── requirements.txt
 ├── package.json
 └── README.md
@@ -193,6 +236,11 @@ The `.clasp.json` file is automatically managed by clasp. It contains:
 
 5. **Verify**:
    - Re-run analysis to confirm fixes
+
+## Net worth / savings source of truth
+
+- The `מעקב שווי נקי YYYY` net worth sheets (hasolidit) take **column C (savings)** from the cashflow workbook's `one_zero_savings_balance` named range.
+- The investments/portfolio workbook should expose the same value via its `worth_cash` named range (for example by using `=IMPORTRANGE("<CASHFLOW_SPREADSHEET_ID>", "one_zero_savings_balance")` in the cell that defines `worth_cash`), so both views share a single source of truth for savings.
 
 ## Troubleshooting
 

@@ -285,7 +285,8 @@ function fetchNetWorthMonthlySums() {
   var stocksWorth = Number(investmentsSheet.getRangeByName('worth_ib_stocks').getValue());
   var stocksAccountCashSheqel = Number(investmentsSheet.getRangeByName('trading_account_balance_sheqel').getValue());
   var stocksAccountCashUSDConverted = Number(investmentsSheet.getRangeByName('trading_account_balance_usd_converted').getValue());
-  var savingsWorth = investmentsSheet.getRangeByName('worth_cash').getValue();
+  // Savings (column C) now comes from cashflow's one_zero_savings_balance named range, not from investments worth_cash.
+  var savingsWorth = budgetSheet.getRangeByName('one_zero_savings_balance').getValue();
   var realEstateWorth = investmentsSheet.getRangeByName('worth_real_estate').getValue();
   var cryptoWorth = investmentsSheet.getRangeByName('worth_crypto').getValue();
   var otsarHayahalCheckingAccount = budgetSheet.getRangeByName('otsar_hahayal_checking_account').getValue();
