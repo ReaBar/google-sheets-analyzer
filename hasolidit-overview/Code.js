@@ -3,9 +3,46 @@ props.setProperty('netWorthSheet', 'מעקב שווי נקי');
 
 // מעקב שווי נקי – filled on 1st of each month by trigger; sheet name = "מעקב שווי נקי YYYY"
 var NET_WORTH_SHEET_BASE = 'מעקב שווי נקי';
-var NET_WORTH_SHEET_FIRST_ROW = 6;   // first data row for credits
-var NET_WORTH_DEBITS_FIRST_ROW = 23; // first data row for debits
+var NET_WORTH_SHEET_FIRST_ROW = 6;   // sub-header row for credits (do not clear)
+var NET_WORTH_DEBITS_FIRST_ROW = 23; // sub-header row for debits (do not clear)
+var NET_WORTH_CREDITS_FIRST_DATA_ROW = 7;  // first data row for credits
+var NET_WORTH_DEBITS_FIRST_DATA_ROW = 24; // first data row for debits
 var NET_WORTH_DATA_LAST_COL = 17;    // last column we write (B=2 .. Q=17)
+var NET_WORTH_FORMULA_COLUMN_L = 12; // column L: formulas live here; do not clear or overwrite
+
+// --- Formula definitions (single source of truth; edit here and clasp push; script writes these into the sheet) ---
+// When do they run? The script only writes formula strings into cells. Google Sheets then evaluates them
+// on normal recalc (on open, on edit, when dependencies change). No onEdit needed.
+// Use {row} as placeholder; it is replaced with the actual row number when writing.
+var NET_WORTH_FORMULAS = {
+  // Credits block, column L: total of cols B–K for this row
+  creditsTotalL: '=SUM(B{row}:K{row})',
+  // Debits block, column L: total of cols B–I for this row (adjust if your layout differs)
+  debitsTotalL: '=SUM(B{row}:I{row})'
+};
+
+function getNetWorthFormula(formulaKey, row) {
+  var template = NET_WORTH_FORMULAS[formulaKey];
+  return template ? template.replace(/\{row\}/g, String(row)) : '';
+}
+
+/**
+ * Apply NET_WORTH_FORMULAS to column L for all data rows (credits 7–22, debits 24–last used).
+ * Call after clearing when creating a new year sheet so formulas come from the script.
+ */
+function applyNetWorthFormulasToColumnL(sheet) {
+  var colL = NET_WORTH_FORMULA_COLUMN_L;
+  var r;
+  for (r = NET_WORTH_CREDITS_FIRST_DATA_ROW; r <= NET_WORTH_DEBITS_FIRST_ROW - 1; r++) {
+    var f = getNetWorthFormula('creditsTotalL', r);
+    if (f) sheet.getRange(r, colL).setFormula(f);
+  }
+  var lastDebitsRow = getNetWorthDebitsSheetLastRow(sheet);
+  for (r = NET_WORTH_DEBITS_FIRST_DATA_ROW; r < lastDebitsRow; r++) {
+    var g = getNetWorthFormula('debitsTotalL', r);
+    if (g) sheet.getRange(r, colL).setFormula(g);
+  }
+}
 
 // --- Net worth sheet helpers ---
 function getNetWorthSheetForYear(year) {
@@ -15,7 +52,8 @@ function getNetWorthSheetForYear(year) {
 
 /**
  * Create "מעקב שווי נקי YYYY" if missing: duplicate previous year, rename, clear monthly data.
- * Clears rows 6..22 (credits) and 23..end (debits), columns B–Q.
+ * Clears credits (7–22) and debits (24–end) in B–K and M–Q only; column L has formulas and is not cleared.
+ * Rows 6 and 23 are sub-headers and are left as-is.
  * @param {number} year - e.g. 2026
  * @returns {GoogleAppsScript.Spreadsheet.Sheet|null} the sheet, or null if template not found
  */
@@ -36,10 +74,17 @@ function createNetWorthSheetForYearIfMissing(year) {
   var newSheet = template.copyTo(ss);
   newSheet.setName(name);
 
-  // Clear the cells we populate per month: credits block (rows 6–22), debits block (rows 23–end), cols B–Q
+  // Clear monthly data only; skip column L (formulas) and sub-header rows 6 and 23.
   var colStart = 2;
-  newSheet.getRange(NET_WORTH_SHEET_FIRST_ROW, colStart, NET_WORTH_DEBITS_FIRST_ROW - 1, NET_WORTH_DATA_LAST_COL).clearContent();
-  newSheet.getRange(NET_WORTH_DEBITS_FIRST_ROW, colStart, newSheet.getMaxRows(), NET_WORTH_DATA_LAST_COL).clearContent();
+  var lastColBeforeL = NET_WORTH_FORMULA_COLUMN_L - 1;   // K = 11
+  var firstColAfterL = NET_WORTH_FORMULA_COLUMN_L + 1;   // M = 13
+  newSheet.getRange(NET_WORTH_CREDITS_FIRST_DATA_ROW, colStart, NET_WORTH_DEBITS_FIRST_ROW - 1, lastColBeforeL).clearContent();
+  newSheet.getRange(NET_WORTH_CREDITS_FIRST_DATA_ROW, firstColAfterL, NET_WORTH_DEBITS_FIRST_ROW - 1, NET_WORTH_DATA_LAST_COL).clearContent();
+  newSheet.getRange(NET_WORTH_DEBITS_FIRST_DATA_ROW, colStart, newSheet.getMaxRows(), lastColBeforeL).clearContent();
+  newSheet.getRange(NET_WORTH_DEBITS_FIRST_DATA_ROW, firstColAfterL, newSheet.getMaxRows(), NET_WORTH_DATA_LAST_COL).clearContent();
+
+  // Write formula column L from script (single source of truth)
+  applyNetWorthFormulasToColumnL(newSheet);
 
   Logger.log('Created and cleared sheet "' + name + '" from template "' + templateName + '"');
   return newSheet;
@@ -59,14 +104,72 @@ function createAndSetup2026Sheet() {
     Logger.log('Deleted existing sheet "' + name2026 + '"');
   }
   var sheet = createNetWorthSheetForYearIfMissing(2026);
-  var ui = SpreadsheetApp.getUi();
   if (sheet) {
-    if (ui) ui.toast('Sheet "' + name2026 + '" created and cleared.', 5);
+    ss.toast('Sheet "' + name2026 + '" created and cleared.', 5);
     Logger.log('Sheet "' + name2026 + '" created and cleared.');
   } else {
-    if (ui) ui.toast('Failed: template "' + base + ' 2025" not found.', 8);
+    ss.toast('Failed: template "' + base + ' 2025" not found.', 8);
     Logger.log('Failed: template "' + base + ' 2025" not found.');
   }
+}
+
+/**
+ * Export all formulas from every sheet to a dedicated sheet "_FormulaExport".
+ * Run from menu "Export formulas to sheet". Then download that sheet as CSV or copy into the repo
+ * so formulas can be reviewed or migrated into NET_WORTH_FORMULAS in Code.js.
+ */
+function exportFormulasToSheet() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var exportName = '_FormulaExport';
+  var exportSheet = ss.getSheetByName(exportName);
+  if (!exportSheet) {
+    exportSheet = ss.insertSheet(exportName);
+  }
+  exportSheet.clear();
+
+  var out = [['Sheet', 'Cell', 'Formula']];
+  var sheets = ss.getSheets();
+
+  for (var s = 0; s < sheets.length; s++) {
+    var sheet = sheets[s];
+    var range = sheet.getDataRange();
+    if (!range) continue;
+    var formulas = range.getFormulas();
+    var rowOffset = range.getRow();
+    var colOffset = range.getColumn();
+
+    for (var i = 0; i < formulas.length; i++) {
+      for (var j = 0; j < (formulas[i] || []).length; j++) {
+        var f = (formulas[i][j] || '').toString().trim();
+        if (f) {
+          // Strip leading '=' so export shows the formula text, not a live formula that re-evaluates.
+          var formulaText = f.charAt(0) === '=' ? f.substring(1) : f;
+          var a1 = colToLetter(colOffset + j) + (rowOffset + i);
+          out.push([sheet.getName(), a1, formulaText]);
+        }
+      }
+    }
+  }
+
+  if (out.length <= 1) {
+    exportSheet.getRange(1, 1).setValue('No formulas found.');
+  } else {
+    exportSheet.getRange(1, 1, out.length, 3).setValues(out);
+    exportSheet.getRange(1, 1, 1, 3).setFontWeight('bold');
+  }
+
+  ss.toast('Formulas exported to sheet "' + exportName + '". Download as CSV or copy to share.', 8);
+}
+
+function colToLetter(col) {
+  var letter = '';
+  var n = col;
+  while (n > 0) {
+    n--;
+    letter = String.fromCharCode(65 + (n % 26)) + letter;
+    n = Math.floor(n / 26);
+  }
+  return letter;
 }
 
 function test(){
@@ -86,6 +189,8 @@ function onOpen() {
         .addItem('fetch clean worth amounts', 'fetchNetWorthMonthlySums')
         .addItem('fetch mortgage debt', 'updateMortgageAndKupatGemelLeashkaaDebit')
         .addItem('Create 2026 sheet (test)', 'createAndSetup2026Sheet'))
+      .addSeparator()
+      .addItem('Export formulas to sheet', 'exportFormulasToSheet')
       .addToUi();
 }
 
@@ -135,30 +240,27 @@ function fetchNetWorthMonthlySums() {
     return;
   }
 
-  // Credits: one row, columns B–Q (2–17). Order: checking, savings, 0, stocks+cash, crypto, hishtalmut, 0×4, [calculated col], pension+kupat, realEstate, 0×3.
+  // Credits: one row, columns B–K and M–Q. Column L has formulas and is not written.
   var checking = otsarHayahalCheckingAccount + oneZeroCheckingAccount;
   var stocksTotal = stocksWorth + stocksAccountCashSheqel + stocksAccountCashUSDConverted;
   var pensionKupat = reaPensionAmount + reaKupatGemel;
-  var creditsRow = [
-    checking,           // col B
-    savingsWorth,       // col C
-    0,                  // col D
-    stocksTotal,        // col E
-    cryptoWorth,        // col F
-    reaHishtalmutAmount,// col G
-    0, 0, 0, 0,         // cols H–K (kupat gemel, invest real estate, business, expensive material, other)
-    0,                  // col L (calculated, leave 0 or formula handled elsewhere)
-    pensionKupat,       // col M
-    realEstateWorth,    // col N
-    0, 0, 0             // cols O–Q (car, life insurance, collections)
+  var creditsBtoK = [
+    checking, savingsWorth, 0, stocksTotal, cryptoWorth, reaHishtalmutAmount,
+    0, 0, 0, 0  // cols H–K
   ];
+  var creditsMtoQ = [ pensionKupat, realEstateWorth, 0, 0, 0 ];  // cols M–Q
   var netWorthLastRow = getNetWorthSheetLastRow(netWorthSheet);
-  netWorthSheet.getRange(netWorthLastRow, 2, netWorthLastRow, 2 + creditsRow.length - 1).setValues([creditsRow]);
+  netWorthSheet.getRange(netWorthLastRow, 2, netWorthLastRow, 11).setValues([creditsBtoK]);
+  netWorthSheet.getRange(netWorthLastRow, 13, netWorthLastRow, 17).setValues([creditsMtoQ]);
+  var creditsFormulaL = getNetWorthFormula('creditsTotalL', netWorthLastRow);
+  if (creditsFormulaL) netWorthSheet.getRange(netWorthLastRow, NET_WORTH_FORMULA_COLUMN_L).setFormula(creditsFormulaL);
 
-  // Debits: one row, columns B–J. We only set B (credit cards) and J.
+  // Debits: one row, columns B–J; column L gets formula from NET_WORTH_FORMULAS.
   var netWorthDebitsLastRow = getNetWorthDebitsSheetLastRow(netWorthSheet);
   var debitsRow = [ -Number(creditCardsTotal), 0, 0, 0, 0, 0, 0, 0, 0 ];
   netWorthSheet.getRange(netWorthDebitsLastRow, 2, netWorthDebitsLastRow, 10).setValues([debitsRow]);
+  var debitsFormulaL = getNetWorthFormula('debitsTotalL', netWorthDebitsLastRow);
+  if (debitsFormulaL) netWorthSheet.getRange(netWorthDebitsLastRow, NET_WORTH_FORMULA_COLUMN_L).setFormula(debitsFormulaL);
 }
 
 /** Run after fetchNetWorthMonthlySums. Backfills previous month's row with mortgage and Kupat Gemel from cashflow Net Worth Reports. */
@@ -178,10 +280,10 @@ function updateMortgageAndKupatGemelLeashkaaDebit() {
   netWorthSheet.getRange(netWorthLastRow, 8).setValue(analystValue + meitavValue);
 }
 
-// --- Last-row helpers (credits from row 6, debits from row 23) ---
+// --- Last-row helpers (credits from row 7, debits from row 24; rows 6 and 23 are sub-headers) ---
 function getNetWorthSheetLastRow(sheet) {
   var count = 0;
-  var firstRow = NET_WORTH_SHEET_FIRST_ROW;
+  var firstRow = NET_WORTH_CREDITS_FIRST_DATA_ROW;
   for (var i = firstRow; !sheet.getRange('B' + i).isBlank(); i++) {
     count++;
   }
@@ -190,7 +292,7 @@ function getNetWorthSheetLastRow(sheet) {
 
 function getNetWorthDebitsSheetLastRow(sheet) {
   var count = 0;
-  var firstRow = NET_WORTH_DEBITS_FIRST_ROW;
+  var firstRow = NET_WORTH_DEBITS_FIRST_DATA_ROW;
   for (var i = firstRow; !sheet.getRange('B' + i).isBlank(); i++) {
     count++;
   }
