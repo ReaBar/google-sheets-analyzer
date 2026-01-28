@@ -53,20 +53,61 @@ function clearNetWorthDataPreservingFormulas(sheet) {
   var firstCol = 2; // B
   var lastCol = NET_WORTH_DATA_LAST_COL; // Q
 
-  // Helper to clear non-formula cells in a row range
-  function clearBlock(fromRow, toRow) {
-    for (var r = fromRow; r <= toRow; r++) {
-      for (var c = firstCol; c <= lastCol; c++) {
-        var cell = sheet.getRange(r, c);
-        if (!cell.getFormula()) {
-          cell.clearContent();
+  // Helper to clear non-formula cells in a row range, using batched operations:
+  // - Fetch all formulas for the block once with getFormulas()
+  // - For each row, clear only contiguous runs of cells that do NOT contain
+  //   *protected* formulas (we still clear formulas in data columns like B7).
+  // This avoids per-cell getRange/getFormula calls and is much faster.
+  //
+  // protectedFormulaCols is an array of 1-based column numbers whose formulas
+  // we want to keep (e.g. credits totals in column M, debits totals in H and O).
+  function clearBlock(fromRow, toRow, protectedFormulaCols) {
+    var numRows = toRow - fromRow + 1;
+    var numCols = lastCol - firstCol + 1;
+    if (numRows <= 0 || numCols <= 0) return;
+
+    var formulas = sheet
+      .getRange(fromRow, firstCol, numRows, numCols)
+      .getFormulas();
+
+    for (var i = 0; i < numRows; i++) {
+      var rowIndex = fromRow + i;
+      var inRun = false;
+      var runStart = 0;
+
+      for (var j = 0; j < numCols; j++) {
+        var formulaText = (formulas[i][j] || '').toString().trim();
+        var absoluteCol = firstCol + j;
+        var isProtectedFormula =
+          formulaText !== '' &&
+          protectedFormulaCols &&
+          protectedFormulaCols.indexOf(absoluteCol) !== -1;
+
+        // Start of a run of non-formula cells
+        if (!isProtectedFormula && !inRun) {
+          inRun = true;
+          runStart = j;
+        }
+
+        var atLastCol = j === numCols - 1;
+        // End of a run: either we hit a formula or the last column
+        if ((isProtectedFormula || atLastCol) && inRun) {
+          var runEnd = isProtectedFormula ? j - 1 : j;
+          if (runEnd >= runStart) {
+            var colStart = firstCol + runStart;
+            var width = runEnd - runStart + 1;
+            sheet.getRange(rowIndex, colStart, 1, width).clearContent();
+          }
+          inRun = false;
         }
       }
     }
   }
 
-  clearBlock(NET_WORTH_CREDITS_FIRST_DATA_ROW, NET_WORTH_CREDITS_LAST_DATA_ROW);
-  clearBlock(NET_WORTH_DEBITS_FIRST_DATA_ROW, NET_WORTH_DEBITS_LAST_DATA_ROW);
+  // Credits: keep formulas only in column M (13) within B–Q
+  clearBlock(NET_WORTH_CREDITS_FIRST_DATA_ROW, NET_WORTH_CREDITS_LAST_DATA_ROW, [13]);
+  // Debits: keep formulas only in columns H (8) and O (15) within B–Q
+  clearBlock(NET_WORTH_DEBITS_FIRST_DATA_ROW, NET_WORTH_DEBITS_LAST_DATA_ROW, [8, 15]);
 }
 
 // --- Net worth sheet helpers ---
