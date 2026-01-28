@@ -353,6 +353,17 @@ function fetchNetWorthMonthlySums() {
     }
   }
   debitsRange.setValues([existingDebits]);
+
+  // Also ensure K–N (cols 11–14) are zero-initialized for this month, without touching any existing data.
+  var debitsKtoNRange = netWorthSheet.getRange(debitsRow, 11, 1, 4); // K–N
+  var existingKtoN = debitsKtoNRange.getValues()[0];
+  var zerosKtoN = [0, 0, 0, 0];
+  for (var m = 0; m < zerosKtoN.length; m++) {
+    if (existingKtoN[m] === '' || existingKtoN[m] === null) {
+      existingKtoN[m] = zerosKtoN[m];
+    }
+  }
+  debitsKtoNRange.setValues([existingKtoN]);
 }
 
 /** Run after fetchNetWorthMonthlySums. Backfills previous month's row with mortgage and Kupat Gemel from cashflow Net Worth Reports. */
