@@ -101,11 +101,6 @@ Use the clone script to pull any Apps Script into a named folder. Each script ge
 ./scripts/clone_summary_sheet_script.sh 1M6B-GT3QyFry0tDmTdx9Q2BOeSzyqAMl2JYwyseYtMT4KAfn7N5zUKtj portfolio
 ```
 
-**Cashflow Sheet**:
-```bash
-./scripts/clone_summary_sheet_script.sh 1BleUorZ8jom7RBwiuyAtpef1nD2ihGz3-rDT3uYQTcQw0N6vM6DljHn8 cashflow
-```
-
 To get a Script ID:
 1. Open the spreadsheet
 2. **Extensions → Apps Script**
@@ -132,11 +127,6 @@ clasp push    # Push changes to Google
 cd ../portfolio
 clasp pull
 clasp push
-
-# Work with Cashflow script
-cd ../cashflow
-clasp pull
-clasp push
 ```
 
 ## Project Structure
@@ -156,8 +146,6 @@ google-sheets-analyzer/
 ├── hasolidit-overview/                # Hasolidit Overview Sheet Apps Script
 │   └── .clasp.json                    # Self-contained config
 ├── portfolio/                          # Portfolio Sheet Apps Script (stocks, real estate, cash)
-│   └── .clasp.json                    # Self-contained config
-├── cashflow/                           # Cashflow Sheet Apps Script
 │   └── .clasp.json                    # Self-contained config
 ├── requirements.txt
 ├── package.json
@@ -236,11 +224,6 @@ The `.clasp.json` file is automatically managed by clasp. It contains:
 
 5. **Verify**:
    - Re-run analysis to confirm fixes
-
-## Net worth / savings source of truth
-
-- The `מעקב שווי נקי YYYY` net worth sheets (hasolidit) take **column C (savings)** from the cashflow workbook's `one_zero_savings_balance` named range.
-- The investments/portfolio workbook should expose the same value via its `worth_cash` named range (for example by using `=IMPORTRANGE("<CASHFLOW_SPREADSHEET_ID>", "one_zero_savings_balance")` in the cell that defines `worth_cash`), so both views share a single source of truth for savings.
 
 ## Troubleshooting
 
