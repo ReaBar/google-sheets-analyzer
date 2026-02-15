@@ -1,10 +1,3 @@
-// Portfolio Apps Script helpers
-// NOTE: The investments workbook's named range `worth_cash` should mirror the cashflow
-// sheet's `one_zero_savings_balance` named range. In practice, set the cell backing
-// `worth_cash` to a formula such as:
-//   =IMPORTRANGE(\"<CASHFLOW_SPREADSHEET_ID>\", \"one_zero_savings_balance\")
-// so both the portfolio and the hasolidit net worth script share the same savings value.
-//
 // /**
 //  * Retrieves all the rows in the active spreadsheet that contain data and logs the
 //  * values for each row.
